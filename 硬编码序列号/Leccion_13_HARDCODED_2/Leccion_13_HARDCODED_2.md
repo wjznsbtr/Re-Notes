@@ -6,7 +6,7 @@
 
 ![image-20251007204226588](Leccion_13_HARDCODED_2.assets/image-20251007204226588.png)
 
-依据1中方法，输入序列号“Bravo”后，在MessageBoxA和GetItemTextA上设置断点，找到比较和跳转指令。
+依据1中方法，输入序列号“Bravo”后，在MessageBoxA和GetDlgItemTextA上设置断点，找到比较和跳转指令。
 
 ![image-20251007204416725](Leccion_13_HARDCODED_2.assets/image-20251007204416725.png)
 
