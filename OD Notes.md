@@ -272,6 +272,100 @@ ps：需要研究一下xdbg能不能用到这种方法
 
 ### 3:修复IAT(修复导入表)
 
+#### 什么是IAT表：
+
+为了解决不同系统上dll版本不同问题，操作系统提供了IAT表确保程序在不同版本的dll下也能正常运行。程序在不同版本操作系统上都是调用间接跳转到IAT表中,在IAT中读取到真正的API函数入口地址,然后调用之
+
+#### 如何定位IAT：
+
+1以MessageBoxA为例，找到主模块中对它的调用，enter跟进，会看到一堆间接跳转。
+
+![image-20251201194224576](OD Notes.assets/image-20251201194224576.png
+
+![image-20251201194555568](OD Notes.assets/image-20251201194555568.png)
+
+在数据窗口跟随这个跳转，则会看到4013AC这个地址保存了MessageBoxA的地址。类似的，可以看到其他区域也保存了其他函数的地址，那么这个地方就是IAT表。
+
+##### 2IAT填充过程
+
+找到PE文件头下的Import Table Address项
+
+![image-20251201213728520](OD Notes.assets/image-20251201213728520.png)
+
+偏移量是3000，在数据窗口中定位到**403000**
+
+![image-20251201213828993](OD Notes.assets/image-20251201213828993.png)
+
+选中的五个DWORD叫IMAGE_IMPORT_DESCRIPTOR，它具有如下结构：
+
+OriginalFirstThunk
+
+TimeDateStamp           时间戳
+
+ForwarderChain           链表的前一个结构
+
+Name1                   		指向DLL名称的指针
+
+**FirstThunk**               	  指向的链表定义了针对Name1这个动态链接库引入的所有导入函数
+
+关键在于Name1和FirstThunk字段，上图中，Name1对应地址是3290，对应403290处是user32.dll，所以FirstThunk自然对应的是user32的IAT起始地址
+
+![image-20251201214504403](OD Notes.assets/image-20251201214504403.png)
+
+![image-20251201214549503](OD Notes.assets/image-20251201214549503.png)
+
+以此类推，后面紧跟的IID则是关于kernel32.dll的。
+
+此外我们根据user32对应IAT表的起始地址773C2410，在可执行文件中定位到相关API的偏移量是32CC
+
+![image-20251201215201026](OD Notes.assets/image-20251201215201026.png)
+
+据此定位到4032CC，发现是KillTimer函数
+
+![image-20251201215336632](OD Notes.assets/image-20251201215336632.png)
+
+然后系统通过调用GetProcAddress函数获取KillTimer地址773C2410，该地址被填入到403184地址处（见上文）。
+
+再读取IAT的第二个元素773B4FC0
+
+![image-20251201220532380](OD Notes.assets/image-20251201220532380.png)
+
+接着定位到可执行文件的偏移处，是32D8，
+
+![image-20251201220852778](OD Notes.assets/image-20251201220852778.png)
+
+对应的是GetSystemMetrics，定位到它的名称，再次获取它的基址填入到IAT。
+
+![image-20251201220949731](OD Notes.assets/image-20251201220949731.png)
+
+以此类推，直到程序获取完user32.dll的其他API地址遇到IAT为0的项，也就是黄框所示
+
+![image-20251201221322878](OD Notes.assets/image-20251201221322878.png)
+
+之后程序再找导入表的下一个IID，就是kernel32的IID，后面的步骤与上文类似，不再赘述。
+
+![image-20251201221504678](OD Notes.assets/image-20251201221504678.png)
+
+这就是IAT的填充过程
+
+#### 对填充过程的简单总结
+
+在可执行文件中查看这个地址，
+
+![image-20251201203431150](OD Notes.assets/image-20251201203431150.png)保存的是3360，这是一个RVA（相对虚拟地址)，操作系统可以根据这个**指针**,定位（RVA+映像基址)到相应的API**函数名称**,然后通过调用GetProcAddress获取对应API函数的**地址**,然后将该地址填充到IAT中,覆盖原来的3360。
+
+##### 为了确保操作系统将正确的API函数地址填充到IAT中,应该满足一下几点要求:
+
+1:可执行文件各IAT项所在的文件偏移处必须是一个指针,指向一个字符串。
+
+2:该字符串为API函数的名称。
+
+#### 为什么要修复IAT
+
+因为壳将IAT函数名称对应的字符串加密，存到某个不易被发现的地址处。程序运行的时候会先执行解密流程，读取IAT中所需要的API的名称指针,然后定位到API函数地址（GetProcAddress）,将其填入到IAT中,这个时候,IAT中已经被填充了正确的API函数地址,对应的API函数名称的字符串已经不需要了,可以清除掉。
+
+
+
 ### 4:检查目标程序是否存在AntiDump等阻止程序被转储的保护措施,并尝试修复这些问题。
 
 
