@@ -36,7 +36,7 @@
 
 F9跑起来，就到达了OEP
 
-## IAT重定向
+## 0x01IAT重定向
 
 ![image-20251224213756201](tElock0.98.assets/image-20251224213756201.png)
 
@@ -112,3 +112,4 @@ byte(eip) == 0C3 && [esp] == 4271DC
 
 ![image-20251226231514390](tElock0.98.assets/image-20251226231514390.png)
 
+因此我们知道了上边这个api是GetVersion
